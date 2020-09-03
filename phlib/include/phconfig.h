@@ -7,7 +7,7 @@ extern "C" {
 
 #define _User_set_
 
-PHLIBAPI extern _User_set_ PVOID PhInstanceHandle;
+extern _User_set_ PVOID PhInstanceHandle;
 PHLIBAPI extern _User_set_ PWSTR PhApplicationName;
 PHLIBAPI extern _User_set_ ULONG PhGlobalDpi;
 extern PVOID PhHeapHandle;
@@ -36,6 +36,7 @@ PHLIBAPI extern ACCESS_MASK ThreadAllAccess;
 #define WINDOWS_10_RS5 106
 #define WINDOWS_10_19H1 107
 #define WINDOWS_10_19H2 108
+#define WINDOWS_10_20H1 109
 #define WINDOWS_NEW ULONG_MAX
 
 // Debugging

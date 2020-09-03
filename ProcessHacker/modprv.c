@@ -27,7 +27,6 @@
 
 #include <mapimg.h>
 #include <kphuser.h>
-#include <verify.h>
 #include <workqueue.h>
 
 #include <extmgri.h>
@@ -154,6 +153,16 @@ PPH_MODULE_PROVIDER PhCreateModuleProvider(
         if (NT_SUCCESS(PhGetProcessExtendedBasicInformation(moduleProvider->ProcessHandle, &basicInfo)))
         {
             moduleProvider->IsSubsystemProcess = !!basicInfo.IsSubsystemProcess;
+        }
+
+        if (WindowsVersion >= WINDOWS_10_20H1)
+        {
+            BOOLEAN cetEnabled;
+
+            if (NT_SUCCESS(PhGetProcessIsCetEnabled(moduleProvider->ProcessHandle, &cetEnabled)))
+            {
+                moduleProvider->CetEnabled = cetEnabled;
+            }
         }
     }
 
@@ -340,9 +349,9 @@ NTSTATUS PhpModuleQueryWorker(
         // This is needed to detect standard .NET images loaded by .NET core, Mono and other CLR runtimes.
         if (NT_SUCCESS(PhLoadMappedImageEx(PhGetString(data->ModuleItem->FileName), NULL, TRUE, &mappedImage)))
         {
-            if (mappedImage.Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC)
+            if (mappedImage.Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC && mappedImage.NtHeaders32)
             {
-                PIMAGE_OPTIONAL_HEADER32 optionalHeader = (PIMAGE_OPTIONAL_HEADER32)&mappedImage.NtHeaders->OptionalHeader;
+                PIMAGE_OPTIONAL_HEADER32 optionalHeader = &mappedImage.NtHeaders32->OptionalHeader;
 
                 if (optionalHeader->NumberOfRvaAndSizes >= IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR)
                 {
@@ -352,9 +361,10 @@ NTSTATUS PhpModuleQueryWorker(
                     }
                 }
             }
-            else if (mappedImage.Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC)
+#ifdef _WIN64
+            else if (mappedImage.Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC && mappedImage.NtHeaders)
             {
-                PIMAGE_OPTIONAL_HEADER64 optionalHeader = (PIMAGE_OPTIONAL_HEADER64)&mappedImage.NtHeaders->OptionalHeader;
+                PIMAGE_OPTIONAL_HEADER64 optionalHeader = &mappedImage.NtHeaders->OptionalHeader;
 
                 if (optionalHeader->NumberOfRvaAndSizes >= IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR)
                 {
@@ -364,7 +374,7 @@ NTSTATUS PhpModuleQueryWorker(
                     }
                 }
             }
-
+#endif
             PhUnloadMappedImage(&mappedImage);
         }
     }
@@ -605,6 +615,8 @@ VOID PhModuleProviderUpdate(
                 {
                     ULONG_PTR imageBase = 0;
                     ULONG entryPoint = 0;
+                    ULONG debugEntryLength;
+                    PVOID debugEntry;
 
                     moduleItem->ImageTimeDateStamp = remoteMappedImage.NtHeaders->FileHeader.TimeDateStamp;
                     moduleItem->ImageCharacteristics = remoteMappedImage.NtHeaders->FileHeader.Characteristics;
@@ -632,6 +644,32 @@ VOID PhModuleProviderUpdate(
                     if (entryPoint != 0)
                         moduleItem->EntryPoint = PTR_ADD_OFFSET(moduleItem->BaseAddress, entryPoint);
 
+                    if (moduleProvider->CetEnabled && PhGetRemoteMappedImageDebugEntryByTypeEx(
+                        moduleProvider->ProcessHandle,
+                        &remoteMappedImage,
+                        IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS,
+                        readVirtualMemoryCallback,
+                        &debugEntryLength,
+                        &debugEntry
+                        ))
+                    {
+                        ULONG characteristics = ULONG_MAX;
+
+                        if (debugEntryLength == sizeof(ULONG))
+                            characteristics = *(ULONG*)debugEntry;
+
+                        if (characteristics != ULONG_MAX)
+                            moduleItem->ImageDllCharacteristicsEx = characteristics;
+
+                        PhFree(debugEntry);
+                    }
+
+                    if (!PhGetRemoteMappedImageGuardFlagsEx(moduleProvider->ProcessHandle,
+                        &remoteMappedImage,
+                        readVirtualMemoryCallback,
+                        &moduleItem->GuardFlags))
+                        moduleItem->GuardFlags = 0;
+
                     PhUnloadRemoteMappedImage(&remoteMappedImage);
                 }
             }
@@ -639,6 +677,10 @@ VOID PhModuleProviderUpdate(
             // remove CF Guard flag if CFG mitigation is not enabled for the process
             if (!moduleProvider->ControlFlowGuardEnabled)
                 moduleItem->ImageDllCharacteristics &= ~IMAGE_DLLCHARACTERISTICS_GUARD_CF;
+
+            // remove CET flag if CET is not enabled for the process
+            if (!moduleProvider->CetEnabled)
+                moduleItem->ImageDllCharacteristicsEx &= ~IMAGE_DLLCHARACTERISTICS_EX_CET_COMPAT;
 
             if (NT_SUCCESS(PhQueryFullAttributesFileWin32(moduleItem->FileName->Buffer, &networkOpenInfo)))
             {

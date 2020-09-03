@@ -23,7 +23,6 @@
 #include <phapp.h>
 #include <colsetmgr.h>
 #include <settings.h>
-#include <extmgri.h>
 
 PPH_LIST PhInitializeColumnSetList(
     _In_ PWSTR SettingName
@@ -102,7 +101,7 @@ VOID PhSaveSettingsColumnList(
         PhAppendFormatStringBuilder(
             &stringBuilder,
             L"%s-%s-%s-",
-            entry->Name->Buffer,
+            PhGetStringOrEmpty(entry->Name),
             PhGetStringOrEmpty(entry->Setting),
             PhGetStringOrEmpty(entry->Sorting)
             );

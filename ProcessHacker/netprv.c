@@ -25,13 +25,12 @@
 #include <phapp.h>
 #include <phplug.h>
 #include <phsettings.h>
-#include <netprv.h>
-#include <svcsup.h>
-#include <workqueue.h>
-
 #include <apiimport.h>
 #include <extmgri.h>
+#include <netprv.h>
 #include <procprv.h>
+#include <svcsup.h>
+#include <workqueue.h>
 
 typedef struct _PH_NETWORK_CONNECTION
 {
@@ -445,42 +444,24 @@ PPH_STRING PhGetHostNameFromAddressEx(
 
     if (PhEnableNetworkResolveDoHSupport)
     {
-        if (!dnsLocalQuery)
-        {
-            dnsRecordList = PhHttpDnsQuery(
-                NULL,
-                dnsReverseNameString->Buffer,
-                DNS_TYPE_PTR
-                );
-        }
-
-        if (!dnsRecordList && DnsQuery_W_Import())
-        {
-            DnsQuery_W_Import()(
-                dnsReverseNameString->Buffer,
-                DNS_TYPE_PTR,
-                DNS_QUERY_NO_HOSTS_FILE, // DNS_QUERY_BYPASS_CACHE
-                NULL,
-                &dnsRecordList,
-                NULL
-                );
-        }
+        dnsRecordList = PhDnsQuery(
+            NULL,
+            dnsReverseNameString->Buffer,
+            DNS_TYPE_PTR
+            );
     }
-    else
+    else if (DnsQuery_W_Import())
     {
-        if (DnsQuery_W_Import())
-        {
-            DnsQuery_W_Import()(
-                dnsReverseNameString->Buffer,
-                DNS_TYPE_PTR,
-                DNS_QUERY_NO_HOSTS_FILE, // DNS_QUERY_BYPASS_CACHE
-                NULL,
-                &dnsRecordList,
-                NULL
-                );
-        }
+        DnsQuery_W_Import()(
+            dnsReverseNameString->Buffer,
+            DNS_TYPE_PTR,
+            DNS_QUERY_BYPASS_CACHE | DNS_QUERY_NO_HOSTS_FILE,
+            NULL,
+            &dnsRecordList,
+            NULL
+            );
     }
-
+    
     if (dnsRecordList)
     {
         for (PDNS_RECORD dnsRecord = dnsRecordList; dnsRecord; dnsRecord = dnsRecord->pNext)
@@ -492,8 +473,7 @@ PPH_STRING PhGetHostNameFromAddressEx(
             }
         }
 
-        if (DnsFree_Import())
-            DnsFree_Import()(dnsRecordList, DnsFreeRecordList);
+        PhDnsFree(dnsRecordList);
     }
 
     PhDereferenceObject(dnsReverseNameString);

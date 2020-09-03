@@ -28,10 +28,8 @@
 
 #include <phapp.h>
 #include <phplug.h>
-#include <phsettings.h>
 #include <thrdprv.h>
 
-#include <kphuser.h>
 #include <svcsup.h>
 #include <symprv.h>
 #include <workqueue.h>
@@ -743,7 +741,7 @@ VOID PhpThreadProviderUpdate(
     numberOfThreads = process->NumberOfThreads;
 
     // System Idle Process has one thread per CPU. They all have a TID of 0. We can't have duplicate
-    // TIDs, so we'll assign unique TIDs.
+    // TIDs, so we'll assign unique TIDs. (wj32)
     if (threadProvider->ProcessId == SYSTEM_IDLE_PROCESS_ID)
     {
         for (i = 0; i < numberOfThreads; i++)

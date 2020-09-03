@@ -56,7 +56,6 @@
 #include <mainwnd.h>
 #include <phplug.h>
 #include <phsettings.h>
-#include <procprv.h>
 
 static HANDLE PhSipThread = NULL;
 HWND PhSipWindow = NULL;
@@ -333,9 +332,9 @@ VOID PhSipOnInitDialog(
     PH_STRINGREF sectionName;
     PPH_SYSINFO_SECTION section;
 
+    PhSetApplicationWindowIcon(PhSipWindow);
+
     PhSetControlTheme(PhSipWindow, L"explorer");
-    SendMessage(PhSipWindow, WM_SETICON, ICON_SMALL, (LPARAM)PH_LOAD_SHARED_ICON_SMALL(PhInstanceHandle, MAKEINTRESOURCE(IDI_PROCESSHACKER)));
-    SendMessage(PhSipWindow, WM_SETICON, ICON_BIG, (LPARAM)PH_LOAD_SHARED_ICON_LARGE(PhInstanceHandle, MAKEINTRESOURCE(IDI_PROCESSHACKER)));
 
     PhRegisterCallback(
         PhGetGeneralCallback(GeneralCallbackProcessProviderUpdatedEvent),

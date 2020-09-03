@@ -22,16 +22,13 @@
  */
 
 #include <ph.h>
-#include <symprv.h>
 
 #include <dbghelp.h>
-#include <shlobj.h>
 
+#include <symprv.h>
+#include <symprvp.h>
 #include <fastlock.h>
 #include <kphuser.h>
-#include <workqueue.h>
-
-#include <symprvp.h>
 
 typedef struct _PH_SYMBOL_MODULE
 {
@@ -213,13 +210,13 @@ VOID PhpSymbolProviderCompleteInitialization(
     VOID
     )
 {
-#ifdef _WIN64
-    static PH_STRINGREF windowsKitsRootKeyName = PH_STRINGREF_INIT(L"Software\\Wow6432Node\\Microsoft\\Windows Kits\\Installed Roots");
-#else
     static PH_STRINGREF windowsKitsRootKeyName = PH_STRINGREF_INIT(L"Software\\Microsoft\\Windows Kits\\Installed Roots");
+#ifdef _WIN64
+    static PH_STRINGREF windowsKitsRootKeyNameWow64 = PH_STRINGREF_INIT(L"Software\\Wow6432Node\\Microsoft\\Windows Kits\\Installed Roots");
 #endif
     static PH_STRINGREF dbghelpFileName = PH_STRINGREF_INIT(L"dbghelp.dll");
     static PH_STRINGREF symsrvFileName = PH_STRINGREF_INIT(L"symsrv.dll");
+    PPH_STRING winsdkPath;
     PVOID dbghelpHandle;
     PVOID symsrvHandle;
     HANDLE keyHandle;
@@ -230,6 +227,7 @@ VOID PhpSymbolProviderCompleteInitialization(
         return;
     }
 
+    winsdkPath = NULL;
     dbghelpHandle = NULL;
     symsrvHandle = NULL;
 
@@ -241,45 +239,61 @@ VOID PhpSymbolProviderCompleteInitialization(
         0
         )))
     {
-        PPH_STRING winsdkPath;
-        PPH_STRING dbghelpName;
-        PPH_STRING symsrvName;
-
-        winsdkPath = PhQueryRegistryString(keyHandle, L"KitsRoot10"); // Windows 10 SDK
-
+        PhMoveReference(&winsdkPath, PhQueryRegistryString(keyHandle, L"KitsRoot10")); // Windows 10 SDK
         if (PhIsNullOrEmptyString(winsdkPath))
             PhMoveReference(&winsdkPath, PhQueryRegistryString(keyHandle, L"KitsRoot81")); // Windows 8.1 SDK
-
         if (PhIsNullOrEmptyString(winsdkPath))
             PhMoveReference(&winsdkPath, PhQueryRegistryString(keyHandle, L"KitsRoot")); // Windows 8 SDK
 
-        if (!PhIsNullOrEmptyString(winsdkPath))
-        {
-#ifdef _WIN64
-            PhMoveReference(&winsdkPath, PhConcatStringRefZ(&winsdkPath->sr, L"\\Debuggers\\x64\\"));
-#else
-            PhMoveReference(&winsdkPath, PhConcatStringRefZ(&winsdkPath->sr, L"\\Debuggers\\x86\\"));
-#endif
-        }
-
-        if (winsdkPath)
-        {
-            if (dbghelpName = PhConcatStringRef2(&winsdkPath->sr, &dbghelpFileName))
-            {
-                dbghelpHandle = LoadLibrary(dbghelpName->Buffer);
-                PhDereferenceObject(dbghelpName);
-            }
-
-            if (symsrvName = PhConcatStringRef2(&winsdkPath->sr, &symsrvFileName))
-            {
-                symsrvHandle = LoadLibrary(symsrvName->Buffer);
-                PhDereferenceObject(symsrvName);
-            }
-
-            PhDereferenceObject(winsdkPath);
-        }
-
         NtClose(keyHandle);
+    }
+
+#ifdef _WIN64
+    if (PhIsNullOrEmptyString(winsdkPath))
+    {
+        if (NT_SUCCESS(PhOpenKey(
+            &keyHandle,
+            KEY_READ,
+            PH_KEY_LOCAL_MACHINE,
+            &windowsKitsRootKeyNameWow64,
+            0
+            )))
+        {
+            PhMoveReference(&winsdkPath, PhQueryRegistryString(keyHandle, L"KitsRoot10")); // Windows 10 SDK
+            if (PhIsNullOrEmptyString(winsdkPath))
+                PhMoveReference(&winsdkPath, PhQueryRegistryString(keyHandle, L"KitsRoot81")); // Windows 8.1 SDK
+            if (PhIsNullOrEmptyString(winsdkPath))
+                PhMoveReference(&winsdkPath, PhQueryRegistryString(keyHandle, L"KitsRoot")); // Windows 8 SDK
+
+            NtClose(keyHandle);
+        }
+    }
+#endif
+
+    if (winsdkPath)
+    {
+        PPH_STRING dbghelpName;
+        PPH_STRING symsrvName;
+
+#ifdef _WIN64
+        PhMoveReference(&winsdkPath, PhConcatStringRefZ(&winsdkPath->sr, L"\\Debuggers\\x64\\"));
+#else
+        PhMoveReference(&winsdkPath, PhConcatStringRefZ(&winsdkPath->sr, L"\\Debuggers\\x86\\"));
+#endif
+
+        if (dbghelpName = PhConcatStringRef2(&winsdkPath->sr, &dbghelpFileName))
+        {
+            dbghelpHandle = LoadLibrary(dbghelpName->Buffer);
+            PhDereferenceObject(dbghelpName);
+        }
+
+        if (symsrvName = PhConcatStringRef2(&winsdkPath->sr, &symsrvFileName))
+        {
+            symsrvHandle = LoadLibrary(symsrvName->Buffer);
+            PhDereferenceObject(symsrvName);
+        }
+
+        PhDereferenceObject(winsdkPath);
     }
 
     if (!dbghelpHandle)
@@ -415,8 +429,7 @@ BOOLEAN PhGetLineFromAddress(
 
     if (result)
         fileName = PhCreateString(line.FileName);
-
-    if (!result)
+    else
         return FALSE;
 
     *FileName = fileName;
@@ -817,6 +830,68 @@ BOOLEAN PhLoadModuleSymbolProvider(
     }
 
     return TRUE;
+}
+
+typedef struct _PHP_LOAD_PROCESS_SYMBOLS_CONTEXT
+{
+    HANDLE LoadingSymbolsForProcessId;
+    PPH_SYMBOL_PROVIDER SymbolProvider;
+} PHP_LOAD_PROCESS_SYMBOLS_CONTEXT, *PPHP_LOAD_PROCESS_SYMBOLS_CONTEXT;
+
+static BOOLEAN NTAPI PhpSymbolProviderEnumModulesCallback(
+    _In_ PPH_MODULE_INFO Module,
+    _In_opt_ PVOID Context
+    )
+{
+    PPHP_LOAD_PROCESS_SYMBOLS_CONTEXT context = Context;
+
+    if (!context)
+        return TRUE;
+
+    // If we're loading kernel module symbols for a process other than
+    // System, ignore modules which are in user space. This may happen
+    // in Windows 7. (wj32)
+    if (
+        context->LoadingSymbolsForProcessId == SYSTEM_PROCESS_ID &&
+        (ULONG_PTR)Module->BaseAddress <= PhSystemBasicInformation.MaximumUserModeAddress
+        )
+        return TRUE;
+
+    PhLoadModuleSymbolProvider(context->SymbolProvider, Module->FileName->Buffer,
+        (ULONG64)Module->BaseAddress, Module->Size);
+
+    return TRUE;
+}
+
+VOID PhLoadModulesForProcessSymbolProvider(
+    _In_ PPH_SYMBOL_PROVIDER SymbolProvider,
+    _In_ HANDLE ProcessId
+    )
+{
+    PHP_LOAD_PROCESS_SYMBOLS_CONTEXT context;
+
+    memset(&context, 0, sizeof(PHP_LOAD_PROCESS_SYMBOLS_CONTEXT));
+    context.SymbolProvider = SymbolProvider;
+
+    // Load symbols for the process.
+    context.LoadingSymbolsForProcessId = ProcessId;
+    PhEnumGenericModules(
+        ProcessId,
+        SymbolProvider->ProcessHandle,
+        0,
+        PhpSymbolProviderEnumModulesCallback,
+        &context
+        );
+
+    // Load symbols for kernel modules.
+    context.LoadingSymbolsForProcessId = SYSTEM_PROCESS_ID;
+    PhEnumGenericModules(
+        SYSTEM_PROCESS_ID,
+        NULL,
+        0,
+        PhpSymbolProviderEnumModulesCallback,
+        &context
+        );
 }
 
 VOID PhSetOptionsSymbolProvider(

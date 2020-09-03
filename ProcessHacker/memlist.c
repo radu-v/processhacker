@@ -28,7 +28,6 @@
 
 #include <extmgri.h>
 #include <memprv.h>
-#include <phplug.h>
 #include <settings.h>
 #include <phsettings.h>
 
@@ -778,7 +777,7 @@ BOOLEAN NTAPI PhpMemoryTreeNewCallback(
                     if (PhFormatToBuffer(format, 3, node->TypeText, sizeof(node->TypeText), &returnLength))
                     {
                         getCellText->Text.Buffer = node->TypeText;
-                        getCellText->Text.Length = returnLength - sizeof(WCHAR);
+                        getCellText->Text.Length = returnLength - sizeof(UNICODE_NULL);
                     }
                 }
                 break;

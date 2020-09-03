@@ -56,13 +56,9 @@
 #include <procprv.h>
 #include <appresolver.h>
 
-#include <shellapi.h>
-#include <winsta.h>
-
 #include <hndlinfo.h>
 #include <kphuser.h>
 #include <lsasup.h>
-#include <verify.h>
 #include <workqueue.h>
 
 #include <extmgri.h>
@@ -1302,6 +1298,17 @@ VOID PhpFillProcessItem(
         if (NT_SUCCESS(PhGetProcessIsCFGuardEnabled(ProcessItem->QueryHandle, &cfguardEnabled)))
         {
             ProcessItem->IsControlFlowGuardEnabled = cfguardEnabled;
+        }
+    }
+
+    // CET
+    if (WindowsVersion >= WINDOWS_10_20H1 && ProcessItem->QueryHandle)
+    {
+        BOOLEAN cetEnabled;
+
+        if (NT_SUCCESS(PhGetProcessIsCetEnabled(ProcessItem->QueryHandle, &cetEnabled)))
+        {
+            ProcessItem->IsCetEnabled = cetEnabled;
         }
     }
 

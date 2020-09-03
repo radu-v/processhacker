@@ -77,7 +77,7 @@ PPH_HANDLE_PROVIDER PhCreateHandleProvider(
     PhInitializeCallback(&handleProvider->HandleAddedEvent);
     PhInitializeCallback(&handleProvider->HandleModifiedEvent);
     PhInitializeCallback(&handleProvider->HandleRemovedEvent);
-    PhInitializeCallback(&handleProvider->UpdatedEvent);
+    PhInitializeCallback(&handleProvider->HandleUpdatedEvent);
 
     handleProvider->ProcessId = ProcessId;
     handleProvider->ProcessHandle = NULL;
@@ -467,7 +467,7 @@ VOID PhHandleProviderUpdate(
 
         if (PhBeginInitOnce(&initOnce))
         {
-            UNICODE_STRING fileTypeName = RTL_CONSTANT_STRING(L"File");
+            static PH_STRINGREF fileTypeName = PH_STRINGREF_INIT(L"File");
 
             fileObjectTypeIndex = PhGetObjectTypeNumber(&fileTypeName);
 
@@ -706,5 +706,5 @@ VOID PhHandleProviderUpdate(
     }
 
 UpdateExit:
-    PhInvokeCallback(&handleProvider->UpdatedEvent, NULL);
+    PhInvokeCallback(&handleProvider->HandleUpdatedEvent, NULL);
 }

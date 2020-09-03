@@ -109,44 +109,28 @@ NTSTATUS TracertHostnameLookupCallback(
     )
 {
     PTRACERT_RESOLVE_WORKITEM workitem = Parameter;
-    BOOLEAN dnsLocalQuery = FALSE;
     PPH_STRING dnsHostNameString = NULL;
     PPH_STRING dnsReverseNameString = NULL;
     PDNS_RECORD dnsRecordList = NULL;
 
-    if (PhGetIntegerSetting(L"EnableNetworkResolveDoH"))
+    if (workitem->Type == PH_IPV4_NETWORK_TYPE)
     {
-        if (workitem->Type == PH_IPV4_NETWORK_TYPE)
+        IN_ADDR inAddr4 = ((PSOCKADDR_IN)&workitem->SocketAddress)->sin_addr;
+
+        if (IN4_IS_ADDR_UNSPECIFIED(&inAddr4))
         {
-            IN_ADDR inAddr4 = ((PSOCKADDR_IN)&workitem->SocketAddress)->sin_addr;
-
-            if (IN4_IS_ADDR_UNSPECIFIED(&inAddr4))
-            {
-                PhFree(workitem);
-                return STATUS_SUCCESS;
-            }
-
-            if (IN4_IS_ADDR_LOOPBACK(&inAddr4) ||
-                IN4_IS_ADDR_RFC1918(&inAddr4))
-            {
-                dnsLocalQuery = TRUE;
-            }
+            PhFree(workitem);
+            return STATUS_SUCCESS;
         }
-        else if (workitem->Type == PH_IPV6_NETWORK_TYPE)
+    }
+    else if (workitem->Type == PH_IPV6_NETWORK_TYPE)
+    {
+        IN6_ADDR inAddr6 = ((PSOCKADDR_IN6)&workitem->SocketAddress)->sin6_addr;
+
+        if (IN6_IS_ADDR_UNSPECIFIED(&inAddr6))
         {
-            IN6_ADDR inAddr6 = ((PSOCKADDR_IN6)&workitem->SocketAddress)->sin6_addr;
-
-            if (IN6_IS_ADDR_UNSPECIFIED(&inAddr6))
-            {
-                PhFree(workitem);
-                return STATUS_SUCCESS;
-            }
-
-            if (IN6_IS_ADDR_LOOPBACK(&inAddr6) ||
-                IN6_IS_ADDR_LINKLOCAL(&inAddr6))
-            {
-                dnsLocalQuery = TRUE;
-            }
+            PhFree(workitem);
+            return STATUS_SUCCESS;
         }
     }
 
@@ -156,28 +140,11 @@ NTSTATUS TracertHostnameLookupCallback(
         return STATUS_FAIL_CHECK;
     }
 
-    if (!dnsLocalQuery)
-    {
-        dnsRecordList = PhHttpDnsQuery(
-            NULL,
-            dnsReverseNameString->Buffer,
-            DNS_TYPE_PTR
-            );
-    }
-
-    if (!dnsRecordList)
-    {
-        DnsQuery(
-            dnsReverseNameString->Buffer,
-            DNS_TYPE_PTR,
-            DNS_QUERY_BYPASS_CACHE | DNS_QUERY_NO_HOSTS_FILE,
-            NULL,
-            &dnsRecordList,
-            NULL
-            );
-    }
-
-    if (dnsRecordList)
+    if (dnsRecordList = PhDnsQuery(
+        NULL,
+        dnsReverseNameString->Buffer,
+        DNS_TYPE_PTR
+        ))
     {
         PH_STRING_BUILDER stringBuilder;
 
@@ -196,7 +163,7 @@ NTSTATUS TracertHostnameLookupCallback(
 
         dnsHostNameString = PhFinalStringBuilderString(&stringBuilder);
 
-        DnsFree(dnsRecordList, DnsFreeRecordList);
+        PhDnsFree(dnsRecordList);
     }
 
     if (dnsHostNameString)
@@ -567,7 +534,7 @@ VOID TracertMenuActionCallback(
     case MAINMENU_ACTION_PING:
         {
             PH_IP_ENDPOINT RemoteEndpoint;
-            PWSTR terminator = NULL;
+            PWSTR terminator = UNICODE_NULL;
             PTRACERT_ROOT_NODE node;
 
             if ((node = GetSelectedTracertNode(Context)) && !PhIsNullOrEmptyString(node->IpAddressString))
@@ -600,7 +567,7 @@ VOID TracertMenuActionCallback(
     case NETWORK_ACTION_TRACEROUTE:
         {
             PH_IP_ENDPOINT RemoteEndpoint;
-            PWSTR terminator = NULL;
+            PWSTR terminator = UNICODE_NULL;
             PTRACERT_ROOT_NODE node;
 
             if ((node = GetSelectedTracertNode(Context)) && !PhIsNullOrEmptyString(node->IpAddressString))
@@ -633,7 +600,7 @@ VOID TracertMenuActionCallback(
     case NETWORK_ACTION_WHOIS:
         {
             PH_IP_ENDPOINT RemoteEndpoint;
-            PWSTR terminator = NULL;
+            PWSTR terminator = UNICODE_NULL;
             PTRACERT_ROOT_NODE node;
 
             if ((node = GetSelectedTracertNode(Context)) && !PhIsNullOrEmptyString(node->IpAddressString))
@@ -720,9 +687,6 @@ INT_PTR CALLBACK TracertDlgProc(
     {
     case WM_INITDIALOG:
         {
-            SendMessage(hwndDlg, WM_SETICON, ICON_SMALL, (LPARAM)PH_LOAD_SHARED_ICON_SMALL(PhInstanceHandle, MAKEINTRESOURCE(PHAPP_IDI_PROCESSHACKER)));
-            SendMessage(hwndDlg, WM_SETICON, ICON_BIG, (LPARAM)PH_LOAD_SHARED_ICON_LARGE(PhInstanceHandle, MAKEINTRESOURCE(PHAPP_IDI_PROCESSHACKER)));
-
             Static_SetText(hwndDlg,
                 PhaFormatString(L"Tracing %s...", context->IpAddressString)->Buffer
                 );
@@ -733,6 +697,8 @@ INT_PTR CALLBACK TracertDlgProc(
             context->WindowHandle = hwndDlg;
             context->TreeNewHandle = GetDlgItem(hwndDlg, IDC_LIST_TRACERT);
             context->FontHandle = PhCreateCommonFont(-15, FW_MEDIUM, GetDlgItem(hwndDlg, IDC_STATUS));
+
+            PhSetApplicationWindowIcon(hwndDlg);
 
             InitializeTracertTree(context);
 

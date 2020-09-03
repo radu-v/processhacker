@@ -505,6 +505,17 @@ PhGetFileVersionInfo(
     );
 
 PHLIBAPI
+_Success_(return)
+BOOLEAN
+NTAPI
+PhGetFileVersionInfoValue(
+    _In_ PVOID VersionInfo,
+    _In_ PWSTR VersionInfoKey,
+    _Out_opt_ PVOID* Buffer,
+    _Out_opt_ PULONG BufferLength
+    );
+
+PHLIBAPI
 ULONG
 NTAPI
 PhGetFileVersionInfoLangCodePage(
@@ -1212,6 +1223,13 @@ PhGetLoaderEntryDllBase(
 PHLIBAPI
 PVOID
 NTAPI
+PhGetLoaderEntryFullDllBase(
+    _In_ PWSTR FullDllName
+    );
+
+PHLIBAPI
+PVOID
+NTAPI
 PhGetDllBaseProcedureAddress(
     _In_ PVOID DllBase,
     _In_opt_ PSTR ProcedureName,
@@ -1308,6 +1326,14 @@ PhGetExportNameFromOrdinal(
 PHLIBAPI
 NTSTATUS
 NTAPI
+PhLoaderEntryLoadDll(
+    _In_ PWSTR FileName,
+    _Out_ PVOID* BaseAddress
+    );
+
+PHLIBAPI
+NTSTATUS
+NTAPI
 PhLoadAllImportsForDll(
     _In_ PWSTR TargetDllName,
     _In_ PSTR ImportDllName
@@ -1327,6 +1353,17 @@ NTAPI
 PhFileReadAllText(
     _In_ PWSTR FileName,
     _In_ BOOLEAN Unicode
+    );
+
+_Success_(return == S_OK)
+PHLIBAPI
+HRESULT
+NTAPI
+PhGetClassObjectDllBase(
+    _In_ PVOID DllBase,
+    _In_ REFCLSID Rclsid,
+    _In_ REFIID Riid,
+    _Out_ PVOID * Ppv
     );
 
 _Success_(return == S_OK)

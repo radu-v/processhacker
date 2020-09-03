@@ -23,7 +23,6 @@
 #include <phapp.h>
 #include <hexedit.h>
 
-#include <mainwnd.h>
 #include <procprv.h>
 #include <settings.h>
 
@@ -186,8 +185,7 @@ INT_PTR CALLBACK PhpMemoryEditorDlgProc(
         {
             NTSTATUS status;
 
-            SendMessage(hwndDlg, WM_SETICON, ICON_SMALL, (LPARAM)PH_LOAD_SHARED_ICON_SMALL(PhInstanceHandle, MAKEINTRESOURCE(IDI_PROCESSHACKER)));
-            SendMessage(hwndDlg, WM_SETICON, ICON_BIG, (LPARAM)PH_LOAD_SHARED_ICON_LARGE(PhInstanceHandle, MAKEINTRESOURCE(IDI_PROCESSHACKER)));
+            PhSetApplicationWindowIcon(hwndDlg);
 
             if (context->Title)
             {

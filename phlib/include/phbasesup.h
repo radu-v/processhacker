@@ -3276,10 +3276,12 @@ PhHexStringToBuffer(
     );
 
 PHLIBAPI
-PPH_STRING
+BOOLEAN
 NTAPI
 PhHexStringToBufferEx(
-    _In_ PPH_STRINGREF String
+    _In_ PPH_STRINGREF String,
+    _In_ ULONG BufferLength,
+    _Out_writes_bytes_(BufferLength) PVOID Buffer
     );
 
 PHLIBAPI
@@ -3332,6 +3334,7 @@ PhIntegerToString64(
 #define PH_TIMESPAN_HMS 0
 #define PH_TIMESPAN_HMSM 1
 #define PH_TIMESPAN_DHMS 2
+#define PH_TIMESPAN_DHMSM 3
 
 PHLIBAPI
 VOID
@@ -3641,6 +3644,7 @@ PhFormatToBuffer(
     );
 
 PHLIBAPI
+_Success_(return)
 BOOLEAN
 NTAPI
 PhFormatDoubleToUtf8(

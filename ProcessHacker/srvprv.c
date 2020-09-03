@@ -24,11 +24,8 @@
 #include <phapp.h>
 #include <phplug.h>
 #include <srvprv.h>
-#include <workqueue.h>
-
-#include <lsasup.h>
 #include <svcsup.h>
-
+#include <workqueue.h>
 #include <extmgri.h>
 #include <procprv.h>
 #include <phsettings.h>
@@ -805,7 +802,7 @@ VOID PhServiceProviderUpdate(
                 {
                     PPH_PROCESS_ITEM processItem;
 
-                    processItem = PhReferenceProcessItem((HANDLE)(*serviceItem)->ProcessId);
+                    processItem = PhReferenceProcessItem((*serviceItem)->ProcessId);
 
                     if (processItem)
                     {

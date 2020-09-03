@@ -32,13 +32,12 @@
 
 #include <actions.h>
 #include <extmgri.h>
-#include <hndllist.h>
 #include <hndlmenu.h>
 #include <hndlprv.h>
 #include <phplug.h>
 #include <phsettings.h>
 #include <procprv.h>
-#include <settings.h>
+#include <secedit.h>
 
 static PH_STRINGREF EmptyHandlesText = PH_STRINGREF_INIT(L"There are no handles to display.");
 
@@ -183,6 +182,8 @@ VOID PhShowHandleContextMenu(
         PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_HANDLE_PROTECTED, L"&Protected", NULL, NULL), ULONG_MAX);
         PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_HANDLE_INHERIT, L"&Inherit", NULL, NULL), ULONG_MAX);
         PhInsertEMenuItem(menu, PhCreateEMenuSeparator(), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_HANDLE_SECURITY, L"Secu&rity", NULL, NULL), ULONG_MAX);
+        PhInsertEMenuItem(menu, PhCreateEMenuSeparator(), ULONG_MAX);
         PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_HANDLE_PROPERTIES, L"Prope&rties\bEnter", NULL, NULL), ULONG_MAX);
         PhInsertEMenuItem(menu, PhCreateEMenuSeparator(), ULONG_MAX);
         PhInsertEMenuItem(menu, PhCreateEMenuItem(0, ID_HANDLE_COPY, L"&Copy\bCtrl+C", NULL, NULL), ULONG_MAX);
@@ -284,7 +285,7 @@ BOOLEAN PhpHandleTreeFilterCallback(
         // HACK: lazy init the etw object type index (dmex)
         if (PhBeginInitOnce(&initOnce))
         {
-            UNICODE_STRING etwTypeName = RTL_CONSTANT_STRING(L"EtwRegistration");
+            static PH_STRINGREF etwTypeName = PH_STRINGREF_INIT(L"EtwRegistration");
 
             eventTraceTypeIndex = PhGetObjectTypeNumber(&etwTypeName);
 
@@ -355,6 +356,61 @@ BOOLEAN PhpHandleTreeFilterCallback(
     return FALSE;
 }
 
+typedef struct _HANDLE_OPEN_CONTEXT
+{
+    HANDLE ProcessId;
+    PPH_HANDLE_ITEM HandleItem;
+} HANDLE_OPEN_CONTEXT, *PHANDLE_OPEN_CONTEXT;
+
+NTSTATUS PhpProcessHandleOpenCallback(
+    _Out_ PHANDLE Handle,
+    _In_ ACCESS_MASK DesiredAccess,
+    _In_opt_ PVOID Context
+    )
+{
+    PHANDLE_OPEN_CONTEXT context = Context;
+    NTSTATUS status;
+    HANDLE processHandle;
+
+    if (!context)
+        return STATUS_UNSUCCESSFUL;
+
+    if (!NT_SUCCESS(status = PhOpenProcess(
+        &processHandle,
+        PROCESS_DUP_HANDLE,
+        context->ProcessId
+        )))
+        return status;
+
+    status = NtDuplicateObject(
+        processHandle,
+        context->HandleItem->Handle,
+        NtCurrentProcess(),
+        Handle,
+        DesiredAccess,
+        0,
+        0
+        );
+    NtClose(processHandle);
+
+    return status;
+}
+
+NTSTATUS PhpProcessHandleCloseCallback(
+    _In_opt_ PVOID Context
+    )
+{
+    PHANDLE_OPEN_CONTEXT context = Context;
+
+    if (!context)
+        return STATUS_UNSUCCESSFUL;
+
+    PhDereferenceObject(context->HandleItem);
+    PhFree(context);
+
+    return STATUS_SUCCESS;
+}
+
 INT_PTR CALLBACK PhpProcessHandlesDlgProc(
     _In_ HWND hwndDlg,
     _In_ UINT uMsg,
@@ -414,7 +470,7 @@ INT_PTR CALLBACK PhpProcessHandlesDlgProc(
                 &handlesContext->RemovedEventRegistration
                 );
             PhRegisterCallback(
-                &handlesContext->Provider->UpdatedEvent,
+                &handlesContext->Provider->HandleUpdatedEvent,
                 HandlesUpdatedHandler,
                 handlesContext,
                 &handlesContext->UpdatedEventRegistration
@@ -471,7 +527,7 @@ INT_PTR CALLBACK PhpProcessHandlesDlgProc(
                 &handlesContext->RemovedEventRegistration
                 );
             PhUnregisterCallback(
-                &handlesContext->Provider->UpdatedEvent,
+                &handlesContext->Provider->HandleUpdatedEvent,
                 &handlesContext->UpdatedEventRegistration
                 );
             PhUnregisterProvider(&handlesContext->ProviderRegistration);
@@ -583,6 +639,29 @@ INT_PTR CALLBACK PhpProcessHandlesDlgProc(
                         PhReferenceObject(handleItem);
                         PhUiSetAttributesHandle(hwndDlg, processItem->ProcessId, handleItem, attributes);
                         PhDereferenceObject(handleItem);
+                    }
+                }
+                break;
+            case ID_HANDLE_SECURITY:
+                {
+                    PPH_HANDLE_ITEM handleItem = PhGetSelectedHandleItem(&handlesContext->ListContext);
+
+                    if (handleItem)
+                    {
+                        PHANDLE_OPEN_CONTEXT context;
+
+                        context = PhAllocateZero(sizeof(HANDLE_OPEN_CONTEXT));
+                        context->HandleItem = PhReferenceObject(handleItem);
+                        context->ProcessId = processItem->ProcessId;
+
+                        PhEditSecurity(
+                            PhCsForceNoParent ? NULL : hwndDlg,
+                            PhGetString(handleItem->ObjectName),
+                            PhGetString(handleItem->TypeName),
+                            PhpProcessHandleOpenCallback,
+                            PhpProcessHandleCloseCallback,
+                            context
+                            );
                     }
                 }
                 break;

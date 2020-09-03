@@ -2274,7 +2274,7 @@ RtlDecompressBufferEx(
     );
 #endif
 
-#if (PHNT_VERSION >= PHNT_WIN8_1)
+#if (PHNT_VERSION >= PHNT_WINBLUE)
 NTSYSAPI
 NTSTATUS
 NTAPI
@@ -2304,7 +2304,7 @@ RtlDecompressFragment(
     _In_ PVOID WorkSpace
     );
 
-#if (PHNT_VERSION >= PHNT_WIN8_1)
+#if (PHNT_VERSION >= PHNT_WINBLUE)
 NTSYSAPI
 NTSTATUS
 NTAPI
@@ -3003,7 +3003,7 @@ NTSYSAPI
 VOID
 NTAPI
 RtlSetExtendedFeaturesMask(
-    __out PCONTEXT_EX ContextEx,
+    _Out_ PCONTEXT_EX ContextEx,
     _Out_ ULONG64 FeatureMask
     );
 
@@ -3877,6 +3877,9 @@ typedef struct _RTL_HEAP_INFORMATION
     PRTL_HEAP_ENTRY Entries;
 } RTL_HEAP_INFORMATION, *PRTL_HEAP_INFORMATION;
 
+#define RTL_HEAP_SIGNATURE 0xFFEEFFEEUL
+#define RTL_HEAP_SEGMENT_SIGNATURE 0xDDEEDDEEUL
+
 typedef struct _RTL_PROCESS_HEAPS
 {
     ULONG NumberOfHeaps;
@@ -4702,6 +4705,16 @@ RtlQueryProcessDebugInformation(
     _Inout_ PRTL_DEBUG_INFORMATION Buffer
     );
 
+// rev
+NTSYSAPI
+NTSTATUS
+NTAPI
+RtlSetProcessDebugInformation(
+    _In_ HANDLE UniqueProcessId,
+    _In_ ULONG Flags,
+    _Inout_ PRTL_DEBUG_INFORMATION Buffer
+    );
+
 // Messages
 
 NTSYSAPI
@@ -4938,6 +4951,8 @@ NTAPI
 RtlRandomEx(
     _Inout_ PULONG Seed
     );
+
+#define RTL_IMPORT_TABLE_HASH_REVISION 1
 
 NTSYSAPI
 NTSTATUS

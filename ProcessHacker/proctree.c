@@ -30,7 +30,6 @@
 
 #include <phapp.h>
 #include <proctree.h>
-#include <lsasup.h>
 
 #include <appresolver.h>
 #include <cpysave.h>
@@ -160,7 +159,7 @@ VOID PhInitializeProcessTreeList(
     PhAddTreeNewColumnEx(hwnd, PHPRTLC_IOPRIORITY, FALSE, L"I/O priority", 70, PH_ALIGN_LEFT, ULONG_MAX, 0, TRUE);
     PhAddTreeNewColumnEx(hwnd, PHPRTLC_PAGEPRIORITY, FALSE, L"Page priority", 45, PH_ALIGN_RIGHT, ULONG_MAX, DT_RIGHT, TRUE);
     PhAddTreeNewColumnEx(hwnd, PHPRTLC_STARTTIME, FALSE, L"Start time", 100, PH_ALIGN_LEFT, ULONG_MAX, 0, TRUE);
-    PhAddTreeNewColumnEx(hwnd, PHPRTLC_TOTALCPUTIME, FALSE, L"Total CPU time", 90, PH_ALIGN_LEFT, ULONG_MAX, 0, TRUE);
+    PhAddTreeNewColumnEx(hwnd, PHPRTLC_TOTALCPUTIME, FALSE, L"Total CPU time", 90, PH_ALIGN_RIGHT, ULONG_MAX, DT_RIGHT, TRUE);
     PhAddTreeNewColumnEx(hwnd, PHPRTLC_KERNELCPUTIME, FALSE, L"Kernel CPU time", 90, PH_ALIGN_RIGHT, ULONG_MAX, DT_RIGHT, TRUE);
     PhAddTreeNewColumnEx(hwnd, PHPRTLC_USERCPUTIME, FALSE, L"User CPU time", 90, PH_ALIGN_RIGHT, ULONG_MAX, DT_RIGHT, TRUE);
     PhAddTreeNewColumn(hwnd, PHPRTLC_VERIFICATIONSTATUS, FALSE, L"Verification status", 70, PH_ALIGN_LEFT, ULONG_MAX, 0);
@@ -216,6 +215,8 @@ VOID PhInitializeProcessTreeList(
     PhAddTreeNewColumnEx(hwnd, PHPRTLC_DESKTOP, FALSE, L"Desktop", 80, PH_ALIGN_LEFT, ULONG_MAX, 0, TRUE);
     PhAddTreeNewColumnEx(hwnd, PHPRTLC_CRITICAL, FALSE, L"Critical", 80, PH_ALIGN_LEFT, ULONG_MAX, 0, TRUE);
     PhAddTreeNewColumnEx(hwnd, PHPRTLC_PIDHEX, FALSE, L"PID (Hex)", 50, PH_ALIGN_RIGHT, ULONG_MAX, DT_RIGHT, TRUE);
+    PhAddTreeNewColumnEx(hwnd, PHPRTLC_CPUCORECYCLES, FALSE, L"CPU (relative)", 45, PH_ALIGN_RIGHT, ULONG_MAX, DT_RIGHT, TRUE);
+    PhAddTreeNewColumnEx(hwnd, PHPRTLC_CET, FALSE, L"CET", 45, PH_ALIGN_LEFT, ULONG_MAX, 0, TRUE);
 
     TreeNew_SetRedraw(hwnd, TRUE);
 
@@ -546,9 +547,6 @@ VOID PhpRemoveProcessNode(
     PhClearReference(&ProcessNode->IoRoRateText);
     PhClearReference(&ProcessNode->IoWRateText);
     PhClearReference(&ProcessNode->StartTimeText);
-    PhClearReference(&ProcessNode->TotalCpuTimeText);
-    PhClearReference(&ProcessNode->KernelCpuTimeText);
-    PhClearReference(&ProcessNode->UserCpuTimeText);
     PhClearReference(&ProcessNode->RelativeStartTimeText);
     PhClearReference(&ProcessNode->WindowTitleText);
     PhClearReference(&ProcessNode->CyclesText);
@@ -1944,6 +1942,18 @@ BEGIN_SORT_FUNCTION(HexPid)
 }
 END_SORT_FUNCTION
 
+BEGIN_SORT_FUNCTION(CpuCore)
+{
+    sortResult = singlecmp(processItem1->CpuUsage, processItem2->CpuUsage);
+}
+END_SORT_FUNCTION
+
+BEGIN_SORT_FUNCTION(Cet)
+{
+    sortResult = uintcmp(node1->ProcessItem->IsCetEnabled, node2->ProcessItem->IsCetEnabled);
+}
+END_SORT_FUNCTION
+
 BOOLEAN NTAPI PhpProcessTreeNewCallback(
     _In_ HWND hwnd,
     _In_ PH_TREENEW_MESSAGE Message,
@@ -2069,6 +2079,8 @@ BOOLEAN NTAPI PhpProcessTreeNewCallback(
                         SORT_FUNCTION(DesktopInfo),
                         SORT_FUNCTION(Critical),
                         SORT_FUNCTION(HexPid),
+                        SORT_FUNCTION(CpuCore),
+                        SORT_FUNCTION(Cet),
                     };
                     int (__cdecl *sortFunction)(const void *, const void *);
 
@@ -2401,25 +2413,55 @@ BOOLEAN NTAPI PhpProcessTreeNewCallback(
                 }
                 break;
             case PHPRTLC_TOTALCPUTIME:
-                PhMoveReference(&node->TotalCpuTimeText, PhFormatTimeSpan(
-                    processItem->KernelTime.QuadPart + processItem->UserTime.QuadPart,
-                    PH_TIMESPAN_HMSM
-                    ));
-                getCellText->Text = node->TotalCpuTimeText->sr;
+                {
+                    SIZE_T returnLength;
+
+                    if (PhPrintTimeSpanToBuffer(
+                        processItem->KernelTime.QuadPart + processItem->UserTime.QuadPart,
+                        PH_TIMESPAN_DHMSM,
+                        node->TotalCpuTimeText,
+                        sizeof(node->TotalCpuTimeText),
+                        &returnLength
+                        ))
+                    {
+                        getCellText->Text.Buffer = node->TotalCpuTimeText;
+                        getCellText->Text.Length = returnLength - sizeof(UNICODE_NULL);
+                    }
+                }
                 break;
             case PHPRTLC_KERNELCPUTIME:
-                PhMoveReference(&node->KernelCpuTimeText, PhFormatTimeSpan(
-                    processItem->KernelTime.QuadPart,
-                    PH_TIMESPAN_HMSM
-                    ));
-                getCellText->Text = node->KernelCpuTimeText->sr;
+                {
+                    SIZE_T returnLength;
+
+                    if (PhPrintTimeSpanToBuffer(
+                        processItem->KernelTime.QuadPart,
+                        PH_TIMESPAN_DHMSM,
+                        node->KernelCpuTimeText,
+                        sizeof(node->KernelCpuTimeText),
+                        &returnLength
+                        ))
+                    {
+                        getCellText->Text.Buffer = node->KernelCpuTimeText;
+                        getCellText->Text.Length = returnLength - sizeof(UNICODE_NULL);
+                    }
+                }
                 break;
             case PHPRTLC_USERCPUTIME:
-                PhMoveReference(&node->UserCpuTimeText, PhFormatTimeSpan(
-                    processItem->UserTime.QuadPart,
-                    PH_TIMESPAN_HMSM
-                    ));
-                getCellText->Text = node->UserCpuTimeText->sr;
+                {
+                    SIZE_T returnLength;
+
+                    if (PhPrintTimeSpanToBuffer(
+                        processItem->UserTime.QuadPart,
+                        PH_TIMESPAN_DHMSM,
+                        node->UserCpuTimeText,
+                        sizeof(node->UserCpuTimeText),
+                        &returnLength
+                        ))
+                    {
+                        getCellText->Text.Buffer = node->UserCpuTimeText;
+                        getCellText->Text.Length = returnLength - sizeof(UNICODE_NULL);
+                    }
+                }
                 break;
             case PHPRTLC_VERIFICATIONSTATUS:
                 if (processItem->VerifyResult == VrTrusted)
@@ -2920,6 +2962,48 @@ BOOLEAN NTAPI PhpProcessTreeNewCallback(
                         }
                     }
                 }
+                break;
+            case PHPRTLC_CPUCORECYCLES:
+                {
+                    FLOAT cpuUsage = 0;
+
+                    PhpAggregateFieldIfNeeded(node, AggregateTypeFloat, AggregateLocationProcessItem, FIELD_OFFSET(PH_PROCESS_ITEM, CpuUsage), &cpuUsage);
+
+                    cpuUsage *= 100;
+                    cpuUsage = cpuUsage * (ULONG)PhSystemBasicInformation.NumberOfProcessors;
+
+                    if (cpuUsage >= 0.01)
+                    {
+                        PH_FORMAT format;
+                        SIZE_T returnLength;
+
+                        PhInitFormatF(&format, cpuUsage, 2);
+
+                        if (PhFormatToBuffer(&format, 1, node->CpuCoreUsageText, sizeof(node->CpuCoreUsageText), &returnLength))
+                        {
+                            getCellText->Text.Buffer = node->CpuCoreUsageText;
+                            getCellText->Text.Length = returnLength - sizeof(UNICODE_NULL); // minus null terminator
+                        }
+                    }
+                    else if (cpuUsage != 0 && PhCsShowCpuBelow001)
+                    {
+                        PH_FORMAT format[2];
+                        SIZE_T returnLength;
+
+                        PhInitFormatS(&format[0], L"< ");
+                        PhInitFormatF(&format[1], 0.01, 2);
+
+                        if (PhFormatToBuffer(format, 2, node->CpuCoreUsageText, sizeof(node->CpuCoreUsageText), &returnLength))
+                        {
+                            getCellText->Text.Buffer = node->CpuCoreUsageText;
+                            getCellText->Text.Length = returnLength - sizeof(UNICODE_NULL);
+                        }
+                    }
+                }
+                break;
+            case PHPRTLC_CET:
+                if (processItem->IsCetEnabled)
+                    PhInitializeStringRef(&getCellText->Text, L"CET");
                 break;
             default:
                 return FALSE;

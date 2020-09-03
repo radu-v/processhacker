@@ -114,6 +114,18 @@
     <ClCompile Include="debugprp.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="options.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="pesectionprp.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="secprp.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ehcontprp.c">
+      <Filter>Source Files\Pages\Windows</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\peview.h">
@@ -125,10 +137,13 @@
     <ClInclude Include="include\prpsh.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="include\pdb.h">
+    <ClInclude Include="colmgr.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="colmgr.h">
+    <ClInclude Include="include\cvconst.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="include\dia2.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

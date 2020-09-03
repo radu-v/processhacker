@@ -24,7 +24,6 @@
 #include <phapp.h>
 #include <mainwnd.h>
 
-#include <userenv.h>
 #include <winsta.h>
 
 #include <cpysave.h>
@@ -32,27 +31,23 @@
 #include <kphuser.h>
 #include <lsasup.h>
 #include <svcsup.h>
-#include <verify.h>
 #include <workqueue.h>
 #include <phsettings.h>
 
 #include <actions.h>
 #include <colsetmgr.h>
 #include <memsrch.h>
-#include <miniinfo.h>
 #include <netlist.h>
 #include <netprv.h>
 #include <notifico.h>
 #include <phplug.h>
 #include <phsvccl.h>
-#include <procprp.h>
 #include <procprv.h>
 #include <proctree.h>
 #include <secedit.h>
 #include <settings.h>
 #include <srvlist.h>
 #include <srvprv.h>
-#include <sysinfo.h>
 
 #include <mainwndp.h>
 
@@ -154,15 +149,14 @@ BOOLEAN PhMainWndInitialization(
         NULL,
         NULL
         );
-    PhClearReference(&windowName);
 
     if (!PhMainWndHandle)
         return FALSE;
 
-    if (PhGetIntegerSetting(L"EnableWindowText")) // HACK
+    if (windowName)
     {
-        SendMessage(PhMainWndHandle, WM_SETICON, ICON_SMALL, (LPARAM)PH_LOAD_SHARED_ICON_SMALL(PhInstanceHandle, MAKEINTRESOURCE(IDI_PROCESSHACKER)));
-        SendMessage(PhMainWndHandle, WM_SETICON, ICON_BIG, (LPARAM)PH_LOAD_SHARED_ICON_LARGE(PhInstanceHandle, MAKEINTRESOURCE(IDI_PROCESSHACKER)));
+        PhSetApplicationWindowIcon(PhMainWndHandle);
+        PhDereferenceObject(windowName);
     }
 
     // Choose a more appropriate rectangle for the window.
@@ -1149,6 +1143,18 @@ VOID PhMwpOnCommand(
             }
         }
         break;
+    case ID_MISCELLANEOUS_HEAPS:
+        {
+            PPH_PROCESS_ITEM processItem = PhGetSelectedProcessItem();
+
+            if (processItem)
+            {
+                PhReferenceObject(processItem);
+                PhShowProcessHeapsDialog(PhMainWndHandle, processItem);
+                PhDereferenceObject(processItem);
+            }
+        }
+        break;
     case ID_PAGEPRIORITY_VERYLOW:
     case ID_PAGEPRIORITY_LOW:
     case ID_PAGEPRIORITY_MEDIUM:
@@ -2009,9 +2015,9 @@ VOID PhMwpLoadSettings(
     PhEnableNetworkProviderResolve = !!PhGetIntegerSetting(L"EnableNetworkResolve");
     PhEnableProcessQueryStage2 = !!PhGetIntegerSetting(L"EnableStage2");
     PhEnableServiceQueryStage2 = !!PhGetIntegerSetting(L"EnableServiceStage2");
+    PhEnableThemeSupport = !!PhGetIntegerSetting(L"EnableThemeSupport");
     PhEnableTooltipSupport = !!PhGetIntegerSetting(L"EnableTooltipSupport");
     PhEnableLinuxSubsystemSupport = !!PhGetIntegerSetting(L"EnableLinuxSubsystemSupport");
-    PhEnableNetworkResolveDoHSupport = !!PhGetIntegerSetting(L"EnableNetworkResolveDoH");
     PhMwpNotifyIconNotifyMask = PhGetIntegerSetting(L"IconNotifyMask");
     
     if (PhGetIntegerSetting(L"MainWindowAlwaysOnTop"))

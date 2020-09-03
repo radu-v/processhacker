@@ -21,9 +21,9 @@
  */
 
 #include <peview.h>
-#include <shlobj.h>
 
 static PPH_STRING PeSettingsFileName = NULL;
+BOOLEAN PeEnableThemeSupport = FALSE;
 
 VOID PhAddDefaultSettings(
     VOID
@@ -40,8 +40,8 @@ VOID PhAddDefaultSettings(
     PhpAddStringSetting(L"MainWindowPage", L"General");
     PhpAddIntegerPairSetting(L"MainWindowPosition", L"150,150");
     PhpAddScalableIntegerPairSetting(L"MainWindowSize", L"@96|550,580");
-    PhpAddStringSetting(L"ImageGeneralListViewColumns", L"");
-    PhpAddStringSetting(L"ImageGeneralListViewSort", L"");
+    PhpAddStringSetting(L"ImageGeneralPropertiesListViewColumns", L"");
+    PhpAddStringSetting(L"ImageGeneralPropertiesListViewSort", L"");
     PhpAddStringSetting(L"ImageDirectoryListViewColumns", L"");
     PhpAddStringSetting(L"ImageLoadCfgListViewColumns", L"");
     PhpAddStringSetting(L"ImageExportsListViewColumns", L"");
@@ -50,17 +50,20 @@ VOID PhAddDefaultSettings(
     PhpAddStringSetting(L"ImageResourcesListViewColumns", L"");
     PhpAddStringSetting(L"ImageAttributesListViewColumns", L"");
     PhpAddStringSetting(L"ImagePropertiesListViewColumns", L"");
+    PhpAddStringSetting(L"ImageSecurityListViewColumns", L"");
+    PhpAddStringSetting(L"ImageSecurityListViewSort", L"");
     PhpAddStringSetting(L"ImageStreamsListViewColumns", L"");
     PhpAddStringSetting(L"ImageHardLinksListViewColumns", L"");
     PhpAddStringSetting(L"ImagePidsListViewColumns", L"");
+    PhpAddStringSetting(L"ImageSectionsListViewColumns", L"");
+    PhpAddStringSetting(L"ImageSectionsListViewSort", L"");
     PhpAddStringSetting(L"ImageTlsListViewColumns", L"");
     PhpAddStringSetting(L"ImageProdIdListViewColumns", L"");
     PhpAddStringSetting(L"ImageDebugListViewColumns", L"");
+    PhpAddStringSetting(L"ImageEhContListViewColumns", L"");
     PhpAddStringSetting(L"LibListViewColumns", L"");
     PhpAddStringSetting(L"PdbTreeListColumns", L"");
-
     PhpAddIntegerSetting(L"TreeListBorderEnable", L"0");
-
     // Wsl properties
     PhpAddStringSetting(L"GeneralWslTreeListColumns", L"");
     PhpAddStringSetting(L"DynamicWslListViewColumns", L"");
@@ -72,7 +75,7 @@ VOID PhUpdateCachedSettings(
     VOID
     )
 {
-    NOTHING;
+    PeEnableThemeSupport = !!PhGetIntegerSetting(L"EnableThemeSupport");
 }
 
 VOID PeInitializeSettings(

@@ -95,8 +95,10 @@
 #define PHPRTLC_DESKTOP 82
 #define PHPRTLC_CRITICAL 83
 #define PHPRTLC_PIDHEX 84
+#define PHPRTLC_CPUCORECYCLES 85
+#define PHPRTLC_CET 86
 
-#define PHPRTLC_MAXIMUM 85
+#define PHPRTLC_MAXIMUM 87
 #define PHPRTLC_IOGROUP_COUNT 9
 
 #define PHPN_WSCOUNTERS 0x1
@@ -203,9 +205,9 @@ typedef struct _PH_PROCESS_NODE
     PPH_STRING IoWRateText;
     WCHAR PagePriorityText[PH_INT32_STR_LEN_1];
     PPH_STRING StartTimeText;
-    PPH_STRING TotalCpuTimeText;
-    PPH_STRING KernelCpuTimeText;
-    PPH_STRING UserCpuTimeText;
+    WCHAR TotalCpuTimeText[PH_TIMESPAN_STR_LEN_1];
+    WCHAR KernelCpuTimeText[PH_TIMESPAN_STR_LEN_1];
+    WCHAR UserCpuTimeText[PH_TIMESPAN_STR_LEN_1];
     PPH_STRING RelativeStartTimeText;
     PPH_STRING WindowTitleText;
     PPH_STRING CyclesText;
@@ -229,6 +231,7 @@ typedef struct _PH_PROCESS_NODE
     PPH_STRING ProtectionText;
     PPH_STRING DesktopInfoText;
     WCHAR PidHexText[PH_PTR_STR_LEN_1];
+    WCHAR CpuCoreUsageText[PH_PTR_STR_LEN_1 + 3];
 
     // Graph buffers
     PH_GRAPH_BUFFERS CpuGraphBuffers;

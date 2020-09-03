@@ -63,15 +63,12 @@
 
 #include <shellapi.h>
 #include <shlwapi.h>
-#include <userenv.h>
 #include <winsta.h>
 #include <lm.h>
 
-#include <emenu.h>
-#include <lsasup.h>
-
 #include <apiimport.h>
 #include <actions.h>
+#include <lsasup.h>
 #include <phsvc.h>
 #include <phsvccl.h>
 #include <phsettings.h>
@@ -968,9 +965,6 @@ INT_PTR CALLBACK PhpRunAsDlgProc(
     {
     case WM_INITDIALOG:
         {
-            SendMessage(hwndDlg, WM_SETICON, ICON_SMALL, (LPARAM)PH_LOAD_SHARED_ICON_SMALL(PhInstanceHandle, MAKEINTRESOURCE(IDI_PROCESSHACKER)));
-            SendMessage(hwndDlg, WM_SETICON, ICON_BIG, (LPARAM)PH_LOAD_SHARED_ICON_LARGE(PhInstanceHandle, MAKEINTRESOURCE(IDI_PROCESSHACKER)));
-
             context->ProgramComboBoxWindowHandle = GetDlgItem(hwndDlg, IDC_PROGRAMCOMBO);
             context->SessionEditWindowHandle = GetDlgItem(hwndDlg, IDC_SESSIONCOMBO);
             context->DesktopEditWindowHandle = GetDlgItem(hwndDlg, IDC_DESKTOPCOMBO);
@@ -978,6 +972,8 @@ INT_PTR CALLBACK PhpRunAsDlgProc(
             context->UserComboBoxWindowHandle = GetDlgItem(hwndDlg, IDC_USERNAME);
             context->PasswordEditWindowHandle = GetDlgItem(hwndDlg, IDC_PASSWORD);
             context->ProcessId = (HANDLE)lParam;
+
+            PhSetApplicationWindowIcon(hwndDlg);
 
             PhCenterWindow(hwndDlg, PhMainWndHandle);
 
@@ -2613,13 +2609,12 @@ INT_PTR CALLBACK PhpRunFileWndProc(
     {
     case WM_INITDIALOG:
         {
-            SendMessage(hwndDlg, WM_SETICON, ICON_SMALL, (LPARAM)PH_LOAD_SHARED_ICON_SMALL(PhInstanceHandle, MAKEINTRESOURCE(IDI_PROCESSHACKER)));
-            SendMessage(hwndDlg, WM_SETICON, ICON_BIG, (LPARAM)PH_LOAD_SHARED_ICON_LARGE(PhInstanceHandle, MAKEINTRESOURCE(IDI_PROCESSHACKER)));
-
             context->WindowHandle = hwndDlg;
             context->ComboBoxHandle = GetDlgItem(hwndDlg, IDC_PROGRAMCOMBO);
             context->RunAsCheckboxHandle = GetDlgItem(hwndDlg, IDC_TOGGLEELEVATION);
             context->RunAsInstallerCheckboxHandle = GetDlgItem(hwndDlg, IDC_TRUSTEDINSTALLER);
+
+            PhSetApplicationWindowIcon(hwndDlg);
 
             PhpAddProgramsToComboBox(context->ComboBoxHandle);
             ComboBox_SetCurSel(context->ComboBoxHandle, 0);

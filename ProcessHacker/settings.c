@@ -3,7 +3,7 @@
  *   program settings cache
  *
  * Copyright (C) 2010-2016 wj32
- * Copyright (C) 2017-2018 dmex
+ * Copyright (C) 2017-2020 dmex
  *
  * This file is part of Process Hacker.
  *
@@ -41,8 +41,8 @@ VOID PhAddDefaultSettings(
     PhpAddIntegerSetting(L"ElevationLevel", L"1"); // PromptElevateAction
     PhpAddIntegerSetting(L"EnableCycleCpuUsage", L"1");
     PhpAddIntegerSetting(L"EnableInstantTooltips", L"0");
-    PhpAddIntegerSetting(L"EnableKph", L"1");
-    PhpAddIntegerSetting(L"EnableKphWarnings", L"1");
+    PhpAddIntegerSetting(L"EnableKph", L"0");
+    PhpAddIntegerSetting(L"EnableKphWarnings", L"0");
     PhpAddIntegerSetting(L"EnableHandleSnapshot", L"1");
     PhpAddIntegerSetting(L"EnableNetworkResolve", L"1");
     PhpAddIntegerSetting(L"EnableNetworkResolveDoH", L"0");
@@ -159,6 +159,10 @@ VOID PhAddDefaultSettings(
     PhpAddIntegerSetting(L"SampleCountAutomatic", L"1");
     PhpAddIntegerSetting(L"ScrollToNewProcesses", L"0");
     PhpAddStringSetting(L"SearchEngine", L"https://www.google.com/search?q=\"%s\"");
+    PhpAddStringSetting(L"SegmentHeapListViewColumns", L"");
+    PhpAddStringSetting(L"SegmentHeapListViewSort", L"0,1");
+    PhpAddIntegerPairSetting(L"SegmentHeapWindowPosition", L"0,0");
+    PhpAddScalableIntegerPairSetting(L"SegmentHeapWindowSize", L"@96|450,500");
     PhpAddIntegerPairSetting(L"ServiceWindowPosition", L"0,0");
     PhpAddStringSetting(L"ServiceListViewColumns", L"");
     PhpAddStringSetting(L"ServiceTreeListColumns", L"");
@@ -310,11 +314,6 @@ VOID PhUpdateCachedSettings(
     PH_UPDATE_SETTING(UseColorUnknown);
     PH_UPDATE_SETTING(ColorUnknown);
 
-    PH_UPDATE_SETTING(UseColorSystemThreadStack);
-    PH_UPDATE_SETTING(ColorSystemThreadStack);
-    PH_UPDATE_SETTING(UseColorUserThreadStack);
-    PH_UPDATE_SETTING(ColorUserThreadStack);
-
     PH_UPDATE_SETTING(GraphShowText);
     PH_UPDATE_SETTING(GraphColorMode);
     PH_UPDATE_SETTING(ColorCpuKernel);
@@ -324,5 +323,5 @@ VOID PhUpdateCachedSettings(
     PH_UPDATE_SETTING(ColorPrivate);
     PH_UPDATE_SETTING(ColorPhysical);
 
-    PhEnableThemeSupport = !!PhGetIntegerSetting(L"EnableThemeSupport");
+    PhEnableNetworkResolveDoHSupport = !!PhGetIntegerSetting(L"EnableNetworkResolveDoH");
 }

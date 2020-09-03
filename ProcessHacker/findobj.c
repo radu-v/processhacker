@@ -1000,7 +1000,7 @@ NTSTATUS PhpFindObjectsThreadStart(
 
             if (PhBeginInitOnce(&initOnce))
             {
-                UNICODE_STRING fileTypeName = RTL_CONSTANT_STRING(L"File");
+                static PH_STRINGREF fileTypeName = PH_STRINGREF_INIT(L"File");
 
                 fileObjectTypeIndex = PhGetObjectTypeNumber(&fileTypeName);
 
@@ -1161,13 +1161,12 @@ INT_PTR CALLBACK PhpFindObjectsDlgProc(
     {
     case WM_INITDIALOG:
         {
-            SendMessage(hwndDlg, WM_SETICON, ICON_SMALL, (LPARAM)PH_LOAD_SHARED_ICON_SMALL(PhInstanceHandle, MAKEINTRESOURCE(IDI_PROCESSHACKER)));
-            SendMessage(hwndDlg, WM_SETICON, ICON_BIG, (LPARAM)PH_LOAD_SHARED_ICON_LARGE(PhInstanceHandle, MAKEINTRESOURCE(IDI_PROCESSHACKER)));
-
             context->WindowHandle = hwndDlg;
             context->TreeNewHandle = GetDlgItem(hwndDlg, IDC_TREELIST);
             context->TypeWindowHandle = GetDlgItem(hwndDlg, IDC_FILTERTYPE);
             context->SearchWindowHandle = GetDlgItem(hwndDlg, IDC_FILTER);
+
+            PhSetApplicationWindowIcon(hwndDlg);
 
             PhRegisterDialog(hwndDlg);
             PhCreateSearchControl(hwndDlg, context->SearchWindowHandle, L"Find Handles or DLLs");

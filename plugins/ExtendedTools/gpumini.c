@@ -46,12 +46,12 @@ BOOLEAN EtpGpuListSectionCallback(
     {
     case MiListSectionTick:
         {
-            PH_FORMAT format[2];
+            PH_FORMAT format[3];
 
             // GPU    %.2f%%
             PhInitFormatS(&format[0], L"GPU    ");
             PhInitFormatF(&format[1], (DOUBLE)EtGpuNodeUsage * 100, 2);
-            PhInitFormatC(&format[0], L'%');
+            PhInitFormatC(&format[2], L'%');
 
             ListSection->Section->Parameters->SetSectionText(ListSection->Section,
                 PH_AUTO_T(PH_STRING, PhFormat(format, RTL_NUMBER_OF(format), 0)));
@@ -85,7 +85,7 @@ BOOLEAN EtpGpuListSectionCallback(
             {
                 PPH_PROCESS_ITEM processItem = processes->Items[i];
                 PET_PROCESS_BLOCK block = EtGetProcessBlock(processItem);
-                gpuUsage += block->GpuNodeUsage;
+                gpuUsage += block->GpuNodeUtilization;
             }
 
             *(PFLOAT)assignSortData->SortData->UserData = gpuUsage;
@@ -138,7 +138,7 @@ int __cdecl EtpGpuListSectionProcessCompareFunction(
     PET_PROCESS_BLOCK block1 = EtGetProcessBlock(node1->ProcessItem);
     PET_PROCESS_BLOCK block2 = EtGetProcessBlock(node2->ProcessItem);
 
-    result = singlecmp(block2->GpuNodeUsage, block1->GpuNodeUsage);
+    result = singlecmp(block2->GpuNodeUtilization, block1->GpuNodeUtilization);
 
     if (result == 0)
         result = uint64cmp(block2->GpuRunningTimeDelta.Value, block1->GpuRunningTimeDelta.Value);

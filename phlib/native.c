@@ -22,7 +22,6 @@
  */
 
 #include <ph.h>
-
 #include <apiimport.h>
 #include <kphuser.h>
 #include <lsasup.h>
@@ -720,6 +719,38 @@ NTSTATUS PhGetProcessIsBeingDebugged(
     return status;
 }
 
+NTSTATUS PhGetProcessDeviceMap(
+    _In_ HANDLE ProcessHandle,
+    _Out_ PULONG DeviceMap
+    )
+{
+    NTSTATUS status;
+#ifndef _WIN64
+    PROCESS_DEVICEMAP_INFORMATION deviceMapInfo;
+#else
+    PROCESS_DEVICEMAP_INFORMATION_EX deviceMapInfo;
+#endif
+    memset(&deviceMapInfo, 0, sizeof(deviceMapInfo));
+
+    status = NtQueryInformationProcess(
+        ProcessHandle,
+        ProcessDeviceMap,
+        &deviceMapInfo,
+        sizeof(deviceMapInfo),
+        NULL
+        );
+
+    if (NT_SUCCESS(status))
+    {
+        if (DeviceMap)
+        {
+            *DeviceMap = deviceMapInfo.Query.DriveMap;
+        }
+    }
+
+    return status;
+}
+
 /**
  * Gets a string stored in a process' parameters structure.
  *
@@ -1084,7 +1115,7 @@ NTSTATUS PhGetProcessEnvironment(
     PVOID environmentRemote;
     MEMORY_BASIC_INFORMATION mbi;
     PVOID environment;
-    ULONG environmentLength;
+    SIZE_T environmentLength;
 
     if (!(Flags & PH_GET_PROCESS_ENVIRONMENT_WOW64))
     {
@@ -1098,7 +1129,7 @@ NTSTATUS PhGetProcessEnvironment(
 
         if (!NT_SUCCESS(status = NtReadVirtualMemory(
             ProcessHandle,
-            PTR_ADD_OFFSET(basicInfo.PebBaseAddress, FIELD_OFFSET(PEB, ProcessParameters)),
+            PTR_ADD_OFFSET(basicInfo.PebBaseAddress, UFIELD_OFFSET(PEB, ProcessParameters)),
             &processParameters,
             sizeof(PVOID),
             NULL
@@ -1107,7 +1138,7 @@ NTSTATUS PhGetProcessEnvironment(
 
         if (!NT_SUCCESS(status = NtReadVirtualMemory(
             ProcessHandle,
-            PTR_ADD_OFFSET(processParameters, FIELD_OFFSET(RTL_USER_PROCESS_PARAMETERS, Environment)),
+            PTR_ADD_OFFSET(processParameters, UFIELD_OFFSET(RTL_USER_PROCESS_PARAMETERS, Environment)),
             &environmentRemote,
             sizeof(PVOID),
             NULL
@@ -1127,7 +1158,7 @@ NTSTATUS PhGetProcessEnvironment(
 
         if (!NT_SUCCESS(status = NtReadVirtualMemory(
             ProcessHandle,
-            PTR_ADD_OFFSET(peb32, FIELD_OFFSET(PEB32, ProcessParameters)),
+            PTR_ADD_OFFSET(peb32, UFIELD_OFFSET(PEB32, ProcessParameters)),
             &processParameters32,
             sizeof(ULONG),
             NULL
@@ -1136,7 +1167,7 @@ NTSTATUS PhGetProcessEnvironment(
 
         if (!NT_SUCCESS(status = NtReadVirtualMemory(
             ProcessHandle,
-            PTR_ADD_OFFSET(processParameters32, FIELD_OFFSET(RTL_USER_PROCESS_PARAMETERS32, Environment)),
+            PTR_ADD_OFFSET(processParameters32, UFIELD_OFFSET(RTL_USER_PROCESS_PARAMETERS32, Environment)),
             &environmentRemote32,
             sizeof(ULONG),
             NULL
@@ -1156,10 +1187,10 @@ NTSTATUS PhGetProcessEnvironment(
         )))
         return status;
 
-    environmentLength = (ULONG)(mbi.RegionSize -
-        ((ULONG_PTR)environmentRemote - (ULONG_PTR)mbi.BaseAddress));
-
     // Read in the entire region of memory.
+
+    environmentLength = (SIZE_T)PTR_SUB_OFFSET(mbi.RegionSize,
+        PTR_SUB_OFFSET(environmentRemote, mbi.BaseAddress));
 
     environment = PhAllocatePage(environmentLength, NULL);
 
@@ -1181,7 +1212,7 @@ NTSTATUS PhGetProcessEnvironment(
     *Environment = environment;
 
     if (EnvironmentLength)
-        *EnvironmentLength = environmentLength;
+        *EnvironmentLength = (ULONG)environmentLength;
 
     return status;
 }
@@ -2707,6 +2738,9 @@ NTSTATUS PhGetTokenIntegrityLevel(
         case SECURITY_MANDATORY_MEDIUM_RID:
             integrityLevel = MandatoryLevelMedium;
             break;
+        //case SECURITY_MANDATORY_MEDIUM_PLUS_RID:
+        //    integrityLevel = MandatoryLevelMedium;
+        //    break;
         case SECURITY_MANDATORY_HIGH_RID:
             integrityLevel = MandatoryLevelHigh;
             break;
@@ -3902,9 +3936,9 @@ BOOLEAN NTAPI PhpEnumProcessModulesCallback(
     BOOLEAN cont = FALSE;
     PPH_STRING mappedFileName = NULL;
     PWSTR fullDllNameOriginal;
-    PWSTR fullDllNameBuffer;
+    PWSTR fullDllNameBuffer = NULL;
     PWSTR baseDllNameOriginal;
-    PWSTR baseDllNameBuffer;
+    PWSTR baseDllNameBuffer = NULL;
 
     if (!parameters)
         return TRUE;
@@ -4023,8 +4057,8 @@ BOOLEAN NTAPI PhpEnumProcessModulesCallback(
     }
     else
     {
-        PhFree(fullDllNameBuffer);
-
+        if (fullDllNameBuffer)
+            PhFree(fullDllNameBuffer);
         if (baseDllNameBuffer)
             PhFree(baseDllNameBuffer);
     }
@@ -4264,8 +4298,8 @@ BOOLEAN NTAPI PhpEnumProcessModules32Callback(
     BOOLEAN cont;
     LDR_DATA_TABLE_ENTRY nativeEntry;
     PPH_STRING mappedFileName;
-    PWSTR baseDllNameBuffer;
-    PWSTR fullDllNameBuffer;
+    PWSTR baseDllNameBuffer = NULL;
+    PWSTR fullDllNameBuffer = NULL;
     PH_STRINGREF fullDllName;
     PH_STRINGREF systemRootString;
 
@@ -4417,8 +4451,10 @@ BOOLEAN NTAPI PhpEnumProcessModules32Callback(
     }
     else
     {
-        PhFree(baseDllNameBuffer);
-        PhFree(fullDllNameBuffer);
+        if (baseDllNameBuffer)
+            PhFree(baseDllNameBuffer);
+        if (fullDllNameBuffer)
+            PhFree(fullDllNameBuffer);
     }
 
     return cont;
@@ -5362,28 +5398,30 @@ BOOLEAN NTAPI PhpIsDotNetEnumProcessModulesCallback(
     _In_opt_ PVOID Context
     )
 {
-    static UNICODE_STRING clrString = RTL_CONSTANT_STRING(L"clr.dll");
-    static UNICODE_STRING mscorwksString = RTL_CONSTANT_STRING(L"mscorwks.dll");
-    static UNICODE_STRING mscorsvrString = RTL_CONSTANT_STRING(L"mscorsvr.dll");
-    static UNICODE_STRING mscorlibString = RTL_CONSTANT_STRING(L"mscorlib.dll");
-    static UNICODE_STRING mscorlibNiString = RTL_CONSTANT_STRING(L"mscorlib.ni.dll");
-    static UNICODE_STRING clrjitString = RTL_CONSTANT_STRING(L"clrjit.dll");
-    static UNICODE_STRING frameworkString = RTL_CONSTANT_STRING(L"\\Microsoft.NET\\Framework\\");
-    static UNICODE_STRING framework64String = RTL_CONSTANT_STRING(L"\\Microsoft.NET\\Framework64\\");
+    static PH_STRINGREF clrString = PH_STRINGREF_INIT(L"clr.dll");
+    static PH_STRINGREF mscorwksString = PH_STRINGREF_INIT(L"mscorwks.dll");
+    static PH_STRINGREF mscorsvrString = PH_STRINGREF_INIT(L"mscorsvr.dll");
+    static PH_STRINGREF mscorlibString = PH_STRINGREF_INIT(L"mscorlib.dll");
+    static PH_STRINGREF mscorlibNiString = PH_STRINGREF_INIT(L"mscorlib.ni.dll");
+    static PH_STRINGREF clrjitString = PH_STRINGREF_INIT(L"clrjit.dll");
+    static PH_STRINGREF frameworkString = PH_STRINGREF_INIT(L"\\Microsoft.NET\\Framework\\");
+    static PH_STRINGREF framework64String = PH_STRINGREF_INIT(L"\\Microsoft.NET\\Framework64\\");
+    PH_STRINGREF baseDllName;
 
     if (!Context)
         return TRUE;
 
+    PhUnicodeStringToStringRef(&Module->BaseDllName, &baseDllName);
+
     if (
-        RtlEqualUnicodeString(&Module->BaseDllName, &clrString, TRUE) ||
-        RtlEqualUnicodeString(&Module->BaseDllName, &mscorwksString, TRUE) ||
-        RtlEqualUnicodeString(&Module->BaseDllName, &mscorsvrString, TRUE)
+        PhEqualStringRef(&baseDllName, &clrString, TRUE) ||
+        PhEqualStringRef(&baseDllName, &mscorwksString, TRUE) ||
+        PhEqualStringRef(&baseDllName, &mscorsvrString, TRUE)
         )
     {
-        UNICODE_STRING fileName;
-        PH_STRINGREF systemRootSr;
-        UNICODE_STRING systemRoot;
-        PUNICODE_STRING frameworkPart;
+        PH_STRINGREF fileName;
+        PH_STRINGREF systemRoot;
+        PPH_STRINGREF frameworkPart;
 
 #ifdef _WIN64
         if (*(PULONG)Context & PH_CLR_PROCESS_IS_WOW64)
@@ -5398,18 +5436,17 @@ BOOLEAN NTAPI PhpIsDotNetEnumProcessModulesCallback(
         }
 #endif
 
-        fileName = Module->FullDllName;
-        PhGetSystemRoot(&systemRootSr);
-        PhStringRefToUnicodeString(&systemRootSr, &systemRoot);
+        PhUnicodeStringToStringRef(&Module->FullDllName, &fileName);
+        PhGetSystemRoot(&systemRoot);
 
-        if (RtlPrefixUnicodeString(&systemRoot, &fileName, TRUE))
+        if (PhStartsWithStringRef(&fileName, &systemRoot, TRUE))
         {
-            fileName.Buffer = (PWCHAR)PTR_ADD_OFFSET(fileName.Buffer, systemRoot.Length);
+            fileName.Buffer = PTR_ADD_OFFSET(fileName.Buffer, systemRoot.Length);
             fileName.Length -= systemRoot.Length;
 
-            if (RtlPrefixUnicodeString(frameworkPart, &fileName, TRUE))
+            if (PhStartsWithStringRef(&fileName, frameworkPart, TRUE))
             {
-                fileName.Buffer = (PWCHAR)PTR_ADD_OFFSET(fileName.Buffer, frameworkPart->Length);
+                fileName.Buffer = PTR_ADD_OFFSET(fileName.Buffer, frameworkPart->Length);
                 fileName.Length -= frameworkPart->Length;
 
                 if (fileName.Length >= 4 * sizeof(WCHAR)) // vx.x
@@ -5434,13 +5471,13 @@ BOOLEAN NTAPI PhpIsDotNetEnumProcessModulesCallback(
         }
     }
     else if (
-        RtlEqualUnicodeString(&Module->BaseDllName, &mscorlibString, TRUE) ||
-        RtlEqualUnicodeString(&Module->BaseDllName, &mscorlibNiString, TRUE)
+        PhEqualStringRef(&baseDllName, &mscorlibString, TRUE) ||
+        PhEqualStringRef(&baseDllName, &mscorlibNiString, TRUE)
         )
     {
         *(PULONG)Context |= PH_CLR_MSCORLIB_PRESENT;
     }
-    else if (RtlEqualUnicodeString(&Module->BaseDllName, &clrjitString, TRUE))
+    else if (PhEqualStringRef(&baseDllName, &clrjitString, TRUE))
     {
         *(PULONG)Context |= PH_CLR_JIT_PRESENT;
     }
@@ -6234,21 +6271,10 @@ VOID PhUpdateDosDevicePrefixes(
     VOID
     )
 {
+    ULONG deviceMap = 0;
     WCHAR deviceNameBuffer[7] = L"\\??\\ :";
-#ifndef _WIN64
-    PROCESS_DEVICEMAP_INFORMATION deviceMapInfo;
-#else
-    PROCESS_DEVICEMAP_INFORMATION_EX deviceMapInfo;
-#endif
-    memset(&deviceMapInfo, 0, sizeof(deviceMapInfo));
 
-    NtQueryInformationProcess(
-        NtCurrentProcess(), 
-        ProcessDeviceMap, 
-        &deviceMapInfo, 
-        sizeof(deviceMapInfo), 
-        NULL
-        );
+    PhGetProcessDeviceMap(NtCurrentProcess(), &deviceMap);
 
     for (ULONG i = 0; i < 0x1A; i++)
     {
@@ -6256,9 +6282,9 @@ VOID PhUpdateDosDevicePrefixes(
         OBJECT_ATTRIBUTES objectAttributes;
         UNICODE_STRING deviceName;
 
-        if (deviceMapInfo.Query.DriveMap)
+        if (deviceMap)
         {
-            if (!(deviceMapInfo.Query.DriveMap & (0x1 << i)))
+            if (!(deviceMap & (0x1 << i)))
                 continue;
         }
 
@@ -7049,7 +7075,7 @@ VOID PhpInitializePredefineKeys(
     {
         currentUserKeyName = &PhPredefineKeyNames[PH_KEY_CURRENT_USER_NUMBER];
         currentUserKeyName->Length = currentUserPrefix.Length + stringSid.Length;
-        currentUserKeyName->Buffer = PhAllocate(currentUserKeyName->Length + sizeof(WCHAR));
+        currentUserKeyName->Buffer = PhAllocate(currentUserKeyName->Length + sizeof(UNICODE_NULL));
         memcpy(currentUserKeyName->Buffer, currentUserPrefix.Buffer, currentUserPrefix.Length);
         memcpy(&currentUserKeyName->Buffer[currentUserPrefix.Length / sizeof(WCHAR)], stringSid.Buffer, stringSid.Length);
     }
@@ -8110,7 +8136,7 @@ NTSTATUS PhCreateDirectory(
 
         if (part.Length != 0)
         {
-            if (PhIsNullOrEmptyString(directoryPath))
+            if (!directoryPath) // PhIsNullOrEmptyString(directoryPath)
                 directoryPath = PhCreateString2(&part);
             else
             {
@@ -8906,4 +8932,125 @@ NTSTATUS PhRevertImpersonationToken(
         &tokenHandle,
         sizeof(HANDLE)
         );
+}
+
+NTSTATUS PhGetProcessHeapSignature(
+    _In_ HANDLE ProcessHandle,
+    _In_ PVOID HeapAddress,
+    _In_ ULONG IsWow64,
+    _Out_ ULONG *HeapSignature
+    )
+{
+    NTSTATUS status = STATUS_UNSUCCESSFUL;
+    ULONG heapSignature = ULONG_MAX;
+
+    if (WindowsVersion >= WINDOWS_7)
+    {
+        status = NtReadVirtualMemory(
+            ProcessHandle,
+            PTR_ADD_OFFSET(HeapAddress, IsWow64 ? 0x8 : 0x10),
+            &heapSignature,
+            sizeof(ULONG),
+            NULL
+            );
+    }
+
+    if (NT_SUCCESS(status))
+    {
+        if (HeapSignature)
+            *HeapSignature = heapSignature;
+    }
+
+    return status;
+}
+
+NTSTATUS PhQueryProcessHeapInformation(
+    _In_ HANDLE ProcessId,
+    _Out_ PPH_PROCESS_DEBUG_HEAP_INFORMATION* HeapInformation
+    )
+{
+    NTSTATUS status;
+    PRTL_DEBUG_INFORMATION debugBuffer;
+    PPH_PROCESS_DEBUG_HEAP_INFORMATION heapDebugInfo;
+
+    if (!(debugBuffer = RtlCreateQueryDebugBuffer(0, FALSE)))
+        return STATUS_UNSUCCESSFUL;
+
+    status = RtlQueryProcessDebugInformation(
+        ProcessId,
+        RTL_QUERY_PROCESS_HEAP_SUMMARY | RTL_QUERY_PROCESS_HEAP_ENTRIES_EX,
+        debugBuffer
+        );
+
+    if (!NT_SUCCESS(status))
+    {
+        RtlDestroyQueryDebugBuffer(debugBuffer);
+        return status;
+    }
+
+    if (!debugBuffer->Heaps)
+    {
+        // The RtlQueryProcessDebugInformation function has two bugs when querying the ProcessId
+        // for a frozen (suspended) immersive process. (dmex)
+        //
+        // 1) It'll deadlock the current thread for 30 seconds.
+        // 2) It'll return STATUS_SUCCESS but with a NULL buffer.
+
+        RtlDestroyQueryDebugBuffer(debugBuffer);
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    heapDebugInfo = PhAllocateZero(sizeof(PH_PROCESS_DEBUG_HEAP_INFORMATION) + debugBuffer->Heaps->NumberOfHeaps * sizeof(PH_PROCESS_DEBUG_HEAP_ENTRY));
+    heapDebugInfo->NumberOfHeaps = debugBuffer->Heaps->NumberOfHeaps;
+    heapDebugInfo->DefaultHeap = debugBuffer->ProcessHeap;
+
+    for (ULONG i = 0; i < heapDebugInfo->NumberOfHeaps; i++)
+    {
+        PRTL_HEAP_INFORMATION heapInfo = &debugBuffer->Heaps->Heaps[i];
+        HANDLE processHandle;
+
+        heapDebugInfo->Heaps[i].Flags = heapInfo->Flags;
+        heapDebugInfo->Heaps[i].Signature = ULONG_MAX;
+        heapDebugInfo->Heaps[i].NumberOfEntries = heapInfo->NumberOfEntries;
+        heapDebugInfo->Heaps[i].BaseAddress = heapInfo->BaseAddress;
+        heapDebugInfo->Heaps[i].BytesAllocated = heapInfo->BytesAllocated;
+        heapDebugInfo->Heaps[i].BytesCommitted = heapInfo->BytesCommitted;
+
+        if (NT_SUCCESS(PhOpenProcess(
+            &processHandle,
+            PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ,
+            ProcessId
+            )))
+        {
+            ULONG signature = ULONG_MAX;
+#ifndef _WIN64
+            BOOLEAN isWow64 = TRUE;
+#else
+            BOOLEAN isWow64 = FALSE;
+
+            PhGetProcessIsWow64(processHandle, &isWow64);
+#endif
+            if (NT_SUCCESS(PhGetProcessHeapSignature(
+                processHandle,
+                heapInfo->BaseAddress,
+                isWow64,
+                &signature
+                )))
+            {
+                heapDebugInfo->Heaps[i].Signature = signature;
+            }
+
+            NtClose(processHandle);
+        }
+    }
+
+    if (HeapInformation)
+        *HeapInformation = heapDebugInfo;
+    else
+        PhFree(heapDebugInfo);
+
+    if (debugBuffer)
+        RtlDestroyQueryDebugBuffer(debugBuffer);
+
+    return STATUS_SUCCESS;
 }

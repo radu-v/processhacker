@@ -28,7 +28,6 @@
 
 #include <emenu.h>
 #include <settings.h>
-#include <kphuser.h>
 #include <hndlinfo.h>
 #include <secedit.h>
 
@@ -87,7 +86,7 @@ typedef enum _PHP_HANDLE_GENERAL_INDEX
     PH_HANDLE_GENERAL_INDEX_ETWGROUPNAME,
 
     PH_HANDLE_GENERAL_INDEX_MAXIMUM
-} PHP_PROCESS_STATISTICS_INDEX;
+} PHP_HANDLE_GENERAL_INDEX;
 
 typedef struct _HANDLE_PROPERTIES_CONTEXT
 {
@@ -659,7 +658,7 @@ VOID PhpUpdateHandleGeneral(
     {
         NTSTATUS status;
         HANDLE processHandle;
-        HANDLE alpcPortHandle;
+        HANDLE alpcPortHandle = NULL;
 
         if (NT_SUCCESS(status = PhOpenProcess(
             &processHandle,
@@ -679,7 +678,7 @@ VOID PhpUpdateHandleGeneral(
             NtClose(processHandle);
         }
 
-        if (NT_SUCCESS(status))
+        if (NT_SUCCESS(status) && alpcPortHandle)
         {
             ALPC_BASIC_INFORMATION basicInfo;
 
@@ -709,7 +708,7 @@ VOID PhpUpdateHandleGeneral(
     {
         NTSTATUS status;
         HANDLE processHandle;
-        HANDLE fileHandle;
+        HANDLE fileHandle = NULL;
 
         if (NT_SUCCESS(status = PhOpenProcess(
             &processHandle,
@@ -729,7 +728,7 @@ VOID PhpUpdateHandleGeneral(
             NtClose(processHandle);
         }
 
-        if (NT_SUCCESS(status))
+        if (NT_SUCCESS(status) && fileHandle)
         {
             BOOLEAN disableFlushButton = FALSE;
             BOOLEAN isFileOrDirectory = FALSE;
@@ -890,7 +889,7 @@ VOID PhpUpdateHandleGeneral(
     {
         NTSTATUS status;
         HANDLE processHandle;
-        HANDLE sectionHandle;
+        HANDLE sectionHandle = NULL;
 
         if (NT_SUCCESS(status = PhOpenProcess(
             &processHandle,
@@ -924,7 +923,7 @@ VOID PhpUpdateHandleGeneral(
             NtClose(processHandle);
         }
 
-        if (NT_SUCCESS(status))
+        if (NT_SUCCESS(status) && sectionHandle)
         {
             SECTION_BASIC_INFORMATION basicInfo;
             PWSTR sectionType = L"Unknown";
@@ -966,7 +965,7 @@ VOID PhpUpdateHandleGeneral(
     {
         NTSTATUS status;
         HANDLE processHandle;
-        HANDLE mutantHandle;
+        HANDLE mutantHandle = NULL;
 
         if (NT_SUCCESS(status = PhOpenProcess(
             &processHandle,
@@ -986,7 +985,7 @@ VOID PhpUpdateHandleGeneral(
             NtClose(processHandle);
         }
 
-        if (NT_SUCCESS(status))
+        if (NT_SUCCESS(status) && mutantHandle)
         {
             MUTANT_BASIC_INFORMATION basicInfo;
             MUTANT_OWNER_INFORMATION ownerInfo;
@@ -1016,7 +1015,7 @@ VOID PhpUpdateHandleGeneral(
     {
         NTSTATUS status;
         HANDLE processHandle;
-        HANDLE dupHandle;
+        HANDLE dupHandle = NULL;
 
         if (NT_SUCCESS(status = PhOpenProcess(
             &processHandle,
@@ -1037,7 +1036,7 @@ VOID PhpUpdateHandleGeneral(
             NtClose(processHandle);
         }
 
-        if (NT_SUCCESS(status))
+        if (NT_SUCCESS(status) && dupHandle)
         {
             NTSTATUS exitStatus = STATUS_PENDING;
             PPH_STRING fileName;
@@ -1100,7 +1099,7 @@ VOID PhpUpdateHandleGeneral(
     {
         NTSTATUS status;
         HANDLE processHandle;
-        HANDLE dupHandle;
+        HANDLE dupHandle = NULL;
 
         if (NT_SUCCESS(status = PhOpenProcess(
             &processHandle,
@@ -1121,7 +1120,7 @@ VOID PhpUpdateHandleGeneral(
             NtClose(processHandle);
         }
 
-        if (NT_SUCCESS(status))
+        if (NT_SUCCESS(status) && dupHandle)
         {
             BOOLEAN isTerminated = FALSE;
             THREAD_BASIC_INFORMATION basicInfo;
@@ -1222,11 +1221,10 @@ INT_PTR CALLBACK PhpHandleGeneralDlgProc(
     {
     case WM_INITDIALOG:
         {
-            // HACK
-            SendMessage(GetParent(hwndDlg), WM_SETICON, ICON_SMALL, (LPARAM)PH_LOAD_SHARED_ICON_SMALL(PhInstanceHandle, MAKEINTRESOURCE(IDI_PROCESSHACKER)));
-            SendMessage(GetParent(hwndDlg), WM_SETICON, ICON_BIG, (LPARAM)PH_LOAD_SHARED_ICON_LARGE(PhInstanceHandle, MAKEINTRESOURCE(IDI_PROCESSHACKER)));
-
             context->ListViewHandle = GetDlgItem(hwndDlg, IDC_LIST);
+
+            PhSetApplicationWindowIcon(hwndDlg);
+
             PhSetListViewStyle(context->ListViewHandle, FALSE, TRUE);
             PhSetControlTheme(context->ListViewHandle, L"explorer");
             PhAddListViewColumn(context->ListViewHandle, 0, 0, 0, LVCFMT_LEFT, 120, L"Name");

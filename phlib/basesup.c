@@ -5677,11 +5677,12 @@ BOOLEAN PhHexStringToBuffer(
     return TRUE;
 }
 
-PPH_STRING PhHexStringToBufferEx(
-    _In_ PPH_STRINGREF String
+BOOLEAN PhHexStringToBufferEx(
+    _In_ PPH_STRINGREF String,
+    _In_ ULONG BufferLength,
+    _Out_writes_bytes_(BufferLength) PVOID Buffer
     )
 {
-    PPH_STRING string;
     SIZE_T length;
     SIZE_T i;
 
@@ -5689,16 +5690,18 @@ PPH_STRING PhHexStringToBufferEx(
         return FALSE;
 
     length = String->Length / sizeof(WCHAR) / 2;
-    string = PhCreateStringEx(NULL, length);
+
+    if (length > BufferLength)
+        return FALSE;
 
     for (i = 0; i < length; i++)
     {
-        ((PUCHAR)string->Buffer)[i] =
-            (UCHAR)(PhCharToInteger[(UCHAR)String->Buffer[i * sizeof(WCHAR)]] << 4) +
-            (UCHAR)PhCharToInteger[(UCHAR)String->Buffer[i * sizeof(WCHAR) + 1]];
+        ((PBYTE)Buffer)[i] =
+            (BYTE)(PhCharToInteger[(BYTE)String->Buffer[i * sizeof(WCHAR)]] << 4) +
+            (BYTE)PhCharToInteger[(BYTE)String->Buffer[i * sizeof(WCHAR) + 1]];
     }
 
-    return string;
+    return TRUE;
 }
 
 /**
@@ -6032,7 +6035,7 @@ VOID PhPrintTimeSpan(
         Ticks,
         Mode,
         Destination,
-        PH_TIMESPAN_STR_LEN,
+        PH_TIMESPAN_STR_LEN_1 * sizeof(WCHAR),
         NULL
         );
 }
@@ -6075,6 +6078,24 @@ BOOLEAN PhPrintTimeSpanToBuffer(
             PhInitFormatI64UWithWidth(&format[4], PH_TICKS_PARTIAL_MIN(Ticks), 2);
             PhInitFormatC(&format[5], L':');
             PhInitFormatI64UWithWidth(&format[6], PH_TICKS_PARTIAL_SEC(Ticks), 2);
+
+            return PhFormatToBuffer(format, RTL_NUMBER_OF(format), Buffer, BufferLength, ReturnLength);
+        }
+        break;
+    case PH_TIMESPAN_DHMSM:
+        {
+            PH_FORMAT format[9];
+
+            // %I64u:%02I64u:%02I64u:%02I64u
+            PhInitFormatI64U(&format[0], PH_TICKS_PARTIAL_DAYS(Ticks));
+            PhInitFormatC(&format[1], L':');
+            PhInitFormatI64UWithWidth(&format[2], PH_TICKS_PARTIAL_HOURS(Ticks), 2);
+            PhInitFormatC(&format[3], L':');
+            PhInitFormatI64UWithWidth(&format[4], PH_TICKS_PARTIAL_MIN(Ticks), 2);
+            PhInitFormatC(&format[5], L':');
+            PhInitFormatI64UWithWidth(&format[6], PH_TICKS_PARTIAL_SEC(Ticks), 2);
+            PhInitFormatC(&format[7], L':');
+            PhInitFormatI64UWithWidth(&format[8], PH_TICKS_PARTIAL_MS(Ticks), 3);
 
             return PhFormatToBuffer(format, RTL_NUMBER_OF(format), Buffer, BufferLength, ReturnLength);
         }
